@@ -1,0 +1,714 @@
+@import "tailwindcss";
+
+/* 深色模式由 <html class="dark"> 驱动（见 src/theme.ts），不用系统媒体查询硬切，
+   这样「跟随系统 / 浅色 / 深色」三态都能用同一套样式。 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* 标题字族：大数字与品牌字用宋体。
+     手机端优先系统自带的宋体，桌面端回落到 Noto Serif SC / Cambria，
+     都不需要额外下载字体文件（中文 webfont 动辄好几 MB，不划算）。 */
+  --font-title:
+    'Songti SC', 'Noto Serif CJK SC', 'Noto Serif SC', 'Source Han Serif SC', Cambria, Georgia,
+    'Times New Roman', serif;
+  /* 卡片面：浅色纯白 → 深色近黑 */
+  --color-card: #ffffff;
+  /* 反色实心按钮（深色底浅色字 ↔ 浅色底深色字） */
+  --color-inverse: #27272a;
+  --color-inverse-ink: #ffffff;
+  /* 品牌绿：实心按钮用 */
+  --color-brand: #10b981;
+  --color-brand-press: #059669;
+  /* 分段控件：选中胶囊要比轨道更亮，深浅色下关系才一致 */
+  --color-segment: #ffffff;
+  --color-segment-track: #f4f4f5;
+}
+
+:root {
+  --app-bg: #f4f4f5;
+  /* 倒计时环的底圈 */
+  --ring-track: #e4e4e7;
+  /* 背景水波：墨色 + 最大不透明度（浅色底上必须比深色更淡） */
+  --ambient-ink: #0a0a0b;
+  --ambient-max: 0.15;
+  color-scheme: light;
+}
+
+/* 深色主题：一次性翻转中性色阶，所以组件里那套 bg-zinc-* / text-zinc-*
+   不用逐个写 dark: 变体，两种主题下语义都成立。 */
+html.dark {
+  --app-bg: #0a0a0b;
+  --ring-track: #2e2e34;
+  --ambient-ink: #ffffff;
+  --ambient-max: 0.21;
+  color-scheme: dark;
+
+  --color-card: #151518;
+  --color-inverse: #fafafa;
+  --color-inverse-ink: #0a0a0b;
+  --color-brand: #10b981;
+  --color-brand-press: #0e9f6e;
+  --color-segment: #34343c;
+  --color-segment-track: #1c1c20;
+
+  --color-zinc-50: #1c1c20;
+  --color-zinc-100: #232328;
+  --color-zinc-200: #2e2e34;
+  --color-zinc-300: #3c3c44;
+  --color-zinc-400: #7c7c86;
+  --color-zinc-500: #a1a1aa;
+  --color-zinc-600: #c3c3cb;
+  --color-zinc-700: #d8d8de;
+  --color-zinc-800: #ebebef;
+  --color-zinc-900: #fafafa;
+
+  /* 语义浅色底（速记法 / 例句 / 报错）在深色下换成深色微染底 */
+  --color-emerald-50: #0c2a20;
+  --color-emerald-100: #113a2c;
+  --color-emerald-200: #16503c;
+  --color-emerald-600: #34d399;
+  --color-emerald-700: #6ee7b7;
+  --color-amber-50: #2a2008;
+  --color-amber-500: #fbbf24;
+  --color-sky-50: #08222f;
+  --color-sky-500: #38bdf8;
+  --color-red-50: #2c1416;
+  --color-red-300: #7f2020;
+  --color-red-400: #f87171;
+  --color-red-500: #f87171;
+}
+
+/* 深色下阴影本来就看不见，靠面色差分层即可 */
+html.dark .shadow-sm,
+html.dark .shadow-md,
+html.dark .shadow-lg,
+html.dark .shadow-xl {
+  box-shadow: none;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--app-bg);
+  color: #18181b;
+  -webkit-font-smoothing: antialiased;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    'PingFang SC',
+    'Microsoft YaHei',
+    sans-serif;
+  overscroll-behavior-y: none;
+  transition: background-color 0.25s ease;
+}
+
+html.dark body {
+  color: #f4f4f5;
+}
+
+/* 表单控件：默认底色是浏览器给的白色，深色下必须交还给主题。
+   Tailwind 的 bg-* 工具类优先级更高，需要时可照常覆盖。 */
+input,
+textarea,
+select {
+  background-color: transparent;
+  color: inherit;
+}
+
+::placeholder {
+  color: var(--color-zinc-400);
+}
+
+/* .tabbar 的定位 / 拖动光标等样式在下面的「液态玻璃」一段 */
+
+/* 收藏对勾的打勾动画 */
+@keyframes collect-pop {
+  0% {
+    transform: scale(0.4);
+  }
+  60% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.collect-pop {
+  animation: collect-pop 0.35s ease;
+}
+
+/* ============ 启动页（黑白 · 石头入水） ============ */
+
+/* 图标轻微上下浮动 */
+@keyframes splash-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+.splash-icon {
+  animation: splash-float 3.2s ease-in-out infinite;
+}
+
+/* 加载文字呼吸 */
+@keyframes splash-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+.splash-loading {
+  animation: splash-breathe 1.6s ease-in-out infinite;
+}
+
+/* 进入按钮：白框古风 + 悬浮反白 */
+.splash-enter {
+  position: relative;
+  overflow: hidden;
+  padding: 13px 52px;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  border-radius: 3px;
+  background: transparent;
+  color: #ffffff;
+  font-size: 15px;
+  letter-spacing: 0.55em;
+  text-indent: 0.55em; /* 抵消末字间距，视觉居中 */
+  cursor: pointer;
+  transition:
+    background 0.35s ease,
+    color 0.35s ease,
+    box-shadow 0.35s ease;
+  animation: splash-breathe 2.4s ease-in-out infinite;
+}
+.splash-enter:hover,
+.splash-enter:focus-visible {
+  background: #ffffff;
+  color: #000000;
+  box-shadow: 0 0 28px rgba(255, 255, 255, 0.35);
+  animation: none;
+}
+.splash-enter:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 4px;
+}
+/* 按钮上被"石头"砸中的那一下：两圈贴着指腹荡开 */
+@keyframes tap-ripple {
+  from {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0.85;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+  }
+}
+.splash-tap-ring {
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  border-radius: 9999px;
+  border: 1.5px solid currentColor;
+  transform: translate(-50%, -50%) scale(0);
+  animation: tap-ripple 0.62s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+  pointer-events: none;
+}
+
+/* 雪花飘落：从顶部落下，左右轻摆，循环 */
+@keyframes snow-fall {
+  0% {
+    transform: translate3d(0, -8vh, 0) rotate(0deg);
+  }
+  100% {
+    transform: translate3d(var(--snow-drift, 20px), 108vh, 0) rotate(300deg);
+  }
+}
+.snowflake {
+  position: absolute;
+  top: -24px;
+  color: #fff;
+  font-family: Georgia, 'Times New Roman', serif;
+  line-height: 1;
+  opacity: var(--snow-opacity, 0.6);
+  animation: snow-fall linear infinite;
+  will-change: transform;
+}
+.snowflake-dot {
+  position: absolute;
+  top: -24px;
+  border-radius: 9999px;
+  background: #fff;
+  opacity: var(--snow-opacity, 0.5);
+  filter: blur(0.4px);
+  animation: snow-fall linear infinite;
+  will-change: transform;
+}
+
+/* —— 石头入水：同心水波 ——
+   以落点为圆心，一圈圈向外荡开；越往外越细越淡（能量摊薄）。 */
+.splash-stone {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+}
+@keyframes stone-wave {
+  0% {
+    transform: translate(-50%, -50%) scale(0.03);
+    opacity: 0;
+    border-width: 7px;
+  }
+  10% {
+    opacity: 0.85;
+  }
+  70% {
+    opacity: 0.35;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+    border-width: 0.5px;
+  }
+}
+.splash-wave-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--wave-d);
+  height: var(--wave-d);
+  border-radius: 9999px;
+  border: 7px solid rgba(255, 255, 255, 0.9);
+  transform: translate(-50%, -50%) scale(0.03);
+  animation: stone-wave var(--wave-dur, 2s) cubic-bezier(0.16, 0.62, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+
+/* —— 浪头漫过：把首页"冲"出来 ——
+   用 animation 而不是 transition：元素是点击后才挂载的，
+   transition 在同一次提交里既没有起始帧也不会跑。
+   铺满色取当前主题的页面底色，所以浅色/深色都接得住。 */
+@keyframes flood-out {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+.splash-flood {
+  position: absolute;
+  z-index: 4;
+  border-radius: 9999px;
+  background: var(--app-bg);
+  /* 亮边＝浪头。没有这道边，铺满的过程看起来就只是一坨白球在长大。 */
+  box-shadow:
+    0 0 0 2.5px rgba(255, 255, 255, 0.85),
+    0 0 48px 10px rgba(255, 255, 255, 0.22);
+  transform: scale(0);
+  animation: flood-out var(--flood-dur, 1.5s) cubic-bezier(0.5, 0, 0.2, 1) var(--flood-delay, 0.62s) forwards;
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* 白波铺满后，整页淡出露出首页 */
+@keyframes splash-fadeout {
+  to {
+    opacity: 0;
+  }
+}
+.splash-fade-out {
+  animation: splash-fadeout 0.45s ease forwards;
+  pointer-events: none;
+}
+
+/* ============ 全局点击涟漪 + 背景水波 ============ */
+/* 涟漪宿主需要的 position / overflow 由 src/ripple.ts 直接写行内样式，
+   不用 class —— React 重渲会把 className 整个写回去，class 会被抹掉。 */
+
+.app-ripple {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  /* currentColor：黑底白字的按钮上荡出白涟漪，白底黑字的上荡出墨涟漪 */
+  background: radial-gradient(
+    circle closest-side,
+    color-mix(in oklab, currentColor 26%, transparent) 0%,
+    color-mix(in oklab, currentColor 13%, transparent) 46%,
+    transparent 72%
+  );
+  transform: translate(-50%, -50%) scale(0.02);
+  animation: app-ripple 620ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+@keyframes app-ripple {
+  from {
+    transform: translate(-50%, -50%) scale(0.02);
+    opacity: 1;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+  }
+}
+
+/* 背景层：静置时每隔几秒随机荡一圈，每次点按再从指尖荡一圈 */
+.ambient-ring {
+  position: absolute;
+  border-radius: 9999px;
+  border: var(--ring-w0, 2px) solid currentColor;
+  color: var(--ambient-ink);
+  transform: translate(-50%, -50%) scale(0.02);
+  opacity: 0;
+  animation: ambient-ring var(--ring-dur, 7s) cubic-bezier(0.16, 0.62, 0.36, 1) forwards;
+  will-change: transform, opacity;
+}
+@keyframes ambient-ring {
+  0% {
+    transform: translate(-50%, -50%) scale(0.02);
+    opacity: 0;
+    border-width: var(--ring-w0, 2px);
+  }
+  14% {
+    opacity: calc(var(--ring-alpha, 1) * var(--ambient-max));
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+    /* 越荡越细：水波摊开时能量在摊薄 */
+    border-width: var(--ring-w1, 2px);
+  }
+}
+
+/* ============ 右上角「梅枝」音乐开关 ============ */
+
+.branch-toggle {
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.45s ease;
+}
+.branch-toggle:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+  border-radius: 9999px;
+}
+
+/* 枝干永远是整根画出来的 —— 冬天的梅枝本来就该是光枝，
+   状态靠花开不开来表达，不靠枝长不长 */
+.plum-branch {
+  opacity: 0.62;
+}
+
+/* 花萼：没开的时候它就是那个圆鼓鼓的花苞。
+   压到比枝干还暗 —— 亮过枝干就变成"铁丝串珠子"了，那是珠子不是花苞。
+   开了之后转成实心花心，花瓣和花丝围着它展开 */
+.plum-calyx {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0.45;
+  transition:
+    transform 0.6s cubic-bezier(0.2, 0.8, 0.3, 1),
+    opacity 0.6s ease;
+}
+.branch-svg.is-bloomed .plum-calyx {
+  transform: scale(0.68);
+  opacity: 1;
+}
+
+/* 没开的花苞，同样压低对比 */
+.plum-bud {
+  opacity: 0.45;
+}
+
+/* 整朵花：从收紧、侧着，慢慢转到摊平
+   transform-box: fill-box 让缩放锚在花瓣自身包围盒的中心 */
+.plum-bloom {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(0.12) rotate(-48deg);
+  opacity: 0;
+  transition:
+    transform 0.85s cubic-bezier(0.18, 0.9, 0.28, 1),
+    opacity 0.4s ease;
+}
+.branch-svg.is-bloomed .plum-bloom {
+  transform: scale(1) rotate(0deg);
+  opacity: 1;
+}
+
+.plum-petal {
+  fill: none;
+}
+
+/* 花丝比花瓣晚一点亮出来 —— 先开瓣，再吐蕊 */
+.plum-stamen,
+.plum-anther {
+  opacity: 0;
+  transition: opacity 0.45s ease 0.3s;
+}
+.branch-svg.is-bloomed .plum-stamen {
+  opacity: 0.7;
+}
+.branch-svg.is-bloomed .plum-anther {
+  opacity: 0.95;
+}
+
+/* 一个音符落下来，那朵花亮一下 */
+@keyframes branch-ring {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  30% {
+    transform: scale(1.42) rotate(0deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+.plum-bloom.is-ringing {
+  animation: branch-ring 0.76s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.plum-bloom.is-ringing .plum-petal {
+  stroke-width: 1.15;
+}
+.plum-bloom.is-ringing .plum-stamen,
+.plum-bloom.is-ringing .plum-anther {
+  opacity: 1;
+}
+
+/* 开着的时候整根枝子极慢地摆，像有风过 */
+@keyframes branch-sway {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-1.2deg);
+  }
+}
+.branch-svg.is-bloomed {
+  transform-origin: 94% 6%;
+  animation: branch-sway 7.5s ease-in-out infinite;
+}
+
+/* ============ 树上的单朵花：花苞 ↔ 绽开 ============ */
+
+/* 花苞本体：没点开的时候看到的就是这颗 */
+.plum-one .plum-bud-body {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition:
+    transform 0.4s cubic-bezier(0.4, 0, 0.6, 1),
+    opacity 0.28s ease;
+}
+.plum-one.is-open .plum-bud-body {
+  transform: scale(0.25);
+  opacity: 0;
+}
+
+/* 整朵花：一边转正一边张开。
+   transform-box 用 view-box 而不是 fill-box —— viewBox 是 -12..12，
+   视口中心正好就是花心，不会因为花瓣缩放导致包围盒变化而让锚点漂移。
+   will-change 把这一层提到合成层上，动画走 GPU，不跟着主线程重绘。 */
+.plum-one .plum-bloom {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transform: scale(0.16) rotate(-68deg);
+  opacity: 0;
+  transition:
+    transform 0.95s cubic-bezier(0.34, 1.5, 0.5, 1),
+    opacity 0.28s ease;
+  will-change: transform, opacity;
+}
+.plum-one.is-open .plum-bloom {
+  transform: scale(1) rotate(0deg);
+  opacity: 1;
+}
+
+/* 花瓣：逐片从花心长出来。
+   每片的 transform-origin 由组件按自己的位置算好指回花心，
+   再错开 85ms，就成了"一层层绽开"而不是"整朵一起放大"。 */
+.plum-one .plum-petal {
+  transform-box: fill-box;
+  transform: scale(0);
+  transition: transform 0.72s cubic-bezier(0.34, 1.7, 0.64, 1);
+  will-change: transform;
+}
+.plum-one.is-open .plum-petal {
+  transform: scale(1);
+}
+
+/* 花丝比花瓣晚一点 —— 先开瓣，再吐蕊 */
+.plum-one .plum-stamens {
+  opacity: 0;
+  transition: opacity 0.5s ease 0.62s;
+}
+.plum-one.is-open .plum-stamens {
+  opacity: 0.92;
+}
+
+/* 绽开时从花心荡开的一圈水波 */
+.plum-one .plum-ripple {
+  opacity: 0;
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+}
+.plum-one.is-open .plum-ripple {
+  animation: plum-ripple 0.95s cubic-bezier(0.2, 0.7, 0.3, 1) 0.04s;
+}
+@keyframes plum-ripple {
+  0% {
+    transform: scale(0.45);
+    opacity: 0;
+    stroke-width: 1.7;
+  }
+  22% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(2.1);
+    opacity: 0;
+    stroke-width: 0.3;
+  }
+}
+
+/* ============ 底部导航栏 · 液态玻璃（悬浮胶囊 · 可拖动） ============ */
+
+/* 悬浮胶囊：不再贴着屏幕底，四条边都离屏边一段距离 ——
+   透镜折射要四条边都露出来，才看得出「一块玻璃」的感觉；
+   safe-area 由 bottom 一起算进去，胶囊自身不用再留 padding */
+.tabbar {
+  bottom: calc(0.9rem + env(safe-area-inset-bottom));
+  cursor: grab;
+  touch-action: none; /* 手指按在玻璃上拖的是玻璃，不是滚页面 */
+  user-select: none;
+  -webkit-user-select: none;
+}
+.tabbar.dragging {
+  cursor: grabbing;
+}
+
+/* 兜底：Safari / Firefox 不支持 backdrop-filter: url()，
+   而且不支持时浏览器会把**整条声明**丢掉 —— 所以兜底和折射版分成两条规则写。
+   写进同一条的话，不支持 url() 的浏览器连 blur 都拿不到，导航栏会变成全透明。
+
+   注意：折射那部分**没有写在这里**。Tailwind v4 的 Lightning CSS 会把
+   手写的 `backdrop-filter` 和 `-webkit-backdrop-filter` 合并成只留 `-webkit-` 一条，
+   而不带前缀的那条才是当前 Chrome 认的 —— 结果折射完全上不去。
+   所以折射由 src/glass.ts 用行内样式挂（行内样式不过构建管道）。 */
+.tabbar-glass {
+  background: color-mix(in srgb, var(--color-card) 55%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  backdrop-filter: blur(18px) saturate(1.15);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.16),
+    0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: background-color 0.25s ease;
+}
+html.dark .tabbar-glass {
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.5),
+    0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+/* 折射挂上之后底色要淡一些，不然背后的内容透不过来，折射也看不出来。
+   上下两道一像素亮线是玻璃的棱，外面那圈阴影是玻璃的厚度 ——
+   这两样决定了它看着是一块玻璃，而不是一块半透明色板 */
+.tabbar-glass[data-glass='on'] {
+  background: color-mix(in srgb, var(--color-card) 35%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 62%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, white 22%, transparent),
+    0 12px 32px rgba(0, 0, 0, 0.14);
+}
+html.dark .tabbar-glass[data-glass='on'] {
+  background: color-mix(in srgb, var(--color-card) 40%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+    0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* 设置页的音量滑块 */
+
+.music-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--color-zinc-200);
+  outline: none;
+  cursor: pointer;
+}
+.music-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: var(--color-zinc-800);
+  cursor: pointer;
+}
+.music-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--color-zinc-800);
+  cursor: pointer;
+}
+.music-range:focus-visible {
+  outline: 2px solid var(--color-zinc-500);
+  outline-offset: 4px;
+}
+
+/* 系统设置里关掉动效时，不做水波，直接进 */
+@media (prefers-reduced-motion: reduce) {
+  .splash-icon,
+  .splash-enter,
+  .splash-loading,
+  .snowflake,
+  .snowflake-dot {
+    animation: none;
+  }
+  .splash-wave-ring,
+  .splash-tap-ring {
+    display: none;
+  }
+  .splash-flood {
+    animation: none;
+    transform: scale(1);
+  }
+  .app-ripple,
+  .ambient-ring {
+    display: none;
+  }
+  .branch-svg.is-bloomed,
+  .plum-bloom.is-ringing {
+    animation: none;
+  }
+  .plum-bloom,
+  .plum-calyx,
+  .plum-stamen,
+  .plum-anther,
+  .plum-one .plum-petal,
+  .plum-one .plum-stamens,
+  .plum-one .plum-bud-body {
+    transition-duration: 1ms;
+    transition-delay: 0ms;
+  }
+  .plum-one .plum-ripple {
+    animation: none;
+    opacity: 0;
+  }
+  body {
+    transition: none;
+  }
+}

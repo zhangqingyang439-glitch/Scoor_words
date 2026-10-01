@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- scoop words · 甜筒线描（和进入界面同一个造型）
+       黑底白线：不管浏览器标签是浅色还是深色底，都能看清 -->
+  <rect width="100" height="100" rx="22.5" fill="#0a0a0b"/>
+  <g transform="translate(50 50) scale(1.45) translate(-32 -30)"
+     fill="none" stroke="#fafafa" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="32" cy="17" r="13"/>
+    <path d="M20 30h24L32 56Z"/>
+    <path d="M32 36v12"/>
+    <path d="M26 41h12"/>
+    <path d="M23 12Q32 4 41 12" opacity=".6"/>
+  </g>
+</svg>

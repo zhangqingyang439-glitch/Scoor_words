@@ -1,0 +1,10 @@
+# 依赖与构建产物
+node_modules/
+dist/
+
+# 桌面版产物（输出到仓库外的 ../Scoop，由 build.config.json 指定）
+dist-desktop/
+
+# 本地环境与系统文件
+*.local
+.DS_Store
