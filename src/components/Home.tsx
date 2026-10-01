@@ -518,8 +518,10 @@ export default function Home({
         )}
       </section>
 
-      {/* 主操作：反色实心（浅色黑底白字 / 深色白底黑字） */}
+      {/* 主操作：反色实心（浅色黑底白字 / 深色白底黑字）。
+          id 给开场收球动画当落点（见 SplashIris） */}
       <button
+        id="home-cta"
         data-ripple-wave="1"
         onClick={() => (book ? onStart(!hasTask) : onGoBooks())}
         className="pointer-events-auto mt-6 w-full rounded-2xl bg-inverse py-4 text-[15px] font-medium tracking-[0.06em] text-inverse-ink shadow-lg shadow-black/20 transition-opacity active:opacity-85"

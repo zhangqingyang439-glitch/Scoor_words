@@ -26,7 +26,9 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,json,woff2}'],
+        // jpg/jpeg：首页的冬夜全景；glb：水面上的小船 ——
+        // 都是 Three.js 运行时按路径加载的，不列进预缓存手机断网就加载不到
+        globPatterns: ['**/*.{js,css,html,svg,png,jpg,jpeg,ico,json,woff2,glb}'],
         navigateFallback: '/index.html',
         maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
         // 真人发音：听过的自动缓存，离线也能播。

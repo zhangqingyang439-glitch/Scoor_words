@@ -595,18 +595,18 @@ select {
   cursor: grabbing;
 }
 
-/* 兜底：Safari / Firefox 不支持 backdrop-filter: url()，
-   而且不支持时浏览器会把**整条声明**丢掉 —— 所以兜底和折射版分成两条规则写。
-   写进同一条的话，不支持 url() 的浏览器连 blur 都拿不到，导航栏会变成全透明。
+/* 兜底：Safari / Firefox 不支持 backdrop-filter: url()。
+   导航栏已按需求改成**实心不透明**：背景就是卡片色，看不到背后内容。
+   液态玻璃的折射（glass.ts 挂的行内样式）就算生效也被实心底盖住，等于隐形；
+   想恢复玻璃观感，把 background 换回
+   color-mix(in srgb, var(--color-card) 55%, transparent) 并补回 blur 即可。
 
    注意：折射那部分**没有写在这里**。Tailwind v4 的 Lightning CSS 会把
    手写的 `backdrop-filter` 和 `-webkit-backdrop-filter` 合并成只留 `-webkit-` 一条，
    而不带前缀的那条才是当前 Chrome 认的 —— 结果折射完全上不去。
    所以折射由 src/glass.ts 用行内样式挂（行内样式不过构建管道）。 */
 .tabbar-glass {
-  background: color-mix(in srgb, var(--color-card) 55%, transparent);
-  -webkit-backdrop-filter: blur(18px) saturate(1.15);
-  backdrop-filter: blur(18px) saturate(1.15);
+  background: var(--color-card);
   box-shadow:
     0 12px 32px rgba(0, 0, 0, 0.16),
     0 2px 8px rgba(0, 0, 0, 0.08);
@@ -618,18 +618,17 @@ html.dark .tabbar-glass {
     0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
-/* 折射挂上之后底色要淡一些，不然背后的内容透不过来，折射也看不出来。
-   上下两道一像素亮线是玻璃的棱，外面那圈阴影是玻璃的厚度 ——
-   这两样决定了它看着是一块玻璃，而不是一块半透明色板 */
+/* 上下两道一像素亮线是玻璃的棱，外面那圈阴影是玻璃的厚度 ——
+   底色实心之后这两样还在，看着是一块有厚度的实心板 */
 .tabbar-glass[data-glass='on'] {
-  background: color-mix(in srgb, var(--color-card) 35%, transparent);
+  background: var(--color-card);
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, white 62%, transparent),
     inset 0 -1px 0 color-mix(in srgb, white 22%, transparent),
     0 12px 32px rgba(0, 0, 0, 0.14);
 }
 html.dark .tabbar-glass[data-glass='on'] {
-  background: color-mix(in srgb, var(--color-card) 40%, transparent);
+  background: var(--color-card);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.14),
     inset 0 -1px 0 rgba(255, 255, 255, 0.05),

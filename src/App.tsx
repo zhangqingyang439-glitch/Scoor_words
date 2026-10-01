@@ -9,6 +9,7 @@ import Books from './components/Books'
 import SettingsPage from './components/SettingsPage'
 import StudyFlow, { type StudySpec } from './components/study/StudyFlow'
 import Splash from './components/Splash'
+import SplashIris from './components/SplashIris'
 import AmbientRipples from './components/AmbientRipples'
 import BranchToggle from './components/BranchToggle'
 import { IconHome, IconNotebook, IconBooks, IconSettings } from './components/Icons'
@@ -29,6 +30,8 @@ export default function App() {
   const [studySpec, setStudySpec] = useState<StudySpec>({ kind: 'normal', extra: false })
   const [bookId, setBookId] = useState<string | null | undefined>(undefined)
   const [showSplash, setShowSplash] = useState(true)
+  // 开场收球：浪头铺满 → 首页就位 → 大圆球慢慢收进主按钮（SplashIris）
+  const [splashIris, setSplashIris] = useState(false)
   const [focusMusic, setFocusMusic] = useState(false)
   const navRef = useRef<HTMLElement>(null)
   const [glassOn, setGlassOn] = useState(false)
@@ -93,8 +96,9 @@ export default function App() {
 
   return (
     <div className="relative mx-auto flex min-h-screen max-w-md flex-col">
-      {/* 首页的全屏水面（3D）：挂在内容层下面，只在首页渲染，切页即卸载 */}
-      {view === 'home' && <WaterScene />}
+      {/* 冬夜水面（3D）只当开场展示：开场页是透明的，正好拿它当背景。
+          点「进入」后整块卸载 —— 之后所有页面（含首页）都是纯黑底 + 墨色水波 */}
+      {showSplash && <WaterScene />}
       <AmbientRipples />
       {/* 树枝音乐开关：挂在 App 外壳上，所以每个界面右上角都有。
           单击开/关，长按跳到设置里的音乐区块 */}
@@ -149,7 +153,15 @@ export default function App() {
         })}
       </nav>
 
-      {showSplash && <Splash onEnter={() => setShowSplash(false)} />}
+      {showSplash && (
+        <Splash
+          onEnter={() => {
+            setShowSplash(false)
+            setSplashIris(true)
+          }}
+        />
+      )}
+      {splashIris && <SplashIris onDone={() => setSplashIris(false)} />}
     </div>
   )
 }

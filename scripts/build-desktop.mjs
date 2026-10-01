@@ -118,6 +118,110 @@ ${bookEntries}
 const scriptIdx = html.indexOf('<script')
 html = html.slice(0, scriptIdx) + patch + html.slice(scriptIdx)
 
+/**
+ * 2.5 把水面首页要用的外部资源内联进去。
+ *
+ * 这些文件是 Three.js 在**运行时按路径字符串**加载的（useGLTF('/boat.glb')、
+ * useTexture('/water/simple/waternormals.jpeg')、drei <Environment> 的冬夜全景），
+ * Vite 打包时改写不了这种运行时字符串，单文件里就只剩路径。
+ *
+ * 结果：双击打开时 file:// 一律拒绝加载（CORS），水面场景一崩，整个 App 白屏。
+ *
+ * 做法上试过两条路，第一条是错的：
+ *   ✗ 直接把产物里的路径字符串替换成 data URI —— 不行。
+ *     drei 的 Environment 内部会往路径前面拼 "/"，于是 data URI 被拼成了
+ *     "/data:image/png;base64,..."，加载器拿着这个去找文件，照样报错。
+ *   ✓ 在网络层拦截：路径原样不动，只在真正发请求的那一刻把已知资源换成 data URI。
+ *     这样不管上层怎么拼路径（拼 /、拼 base、拼目录），都能兜住。
+ *
+ * 只影响桌面单文件版；网页版（部署包）走 HTTP，本来就能正常加载。
+ */
+const INLINE_ASSETS = [
+  ['boat.glb', 'model/gltf-binary'],
+  ['water/simple/waternormals.jpeg', 'image/jpeg'],
+  ['cubemap/winter-night.jpg', 'image/jpeg'],
+  ['fx/smoke.png', 'image/png'],
+]
+const assetMap = {}
+let assetBytes = 0
+const missingAssets = []
+for (const [p, mime] of INLINE_ASSETS) {
+  const file = path.join(ROOT, 'public', p)
+  if (!existsSync(file)) {
+    missingAssets.push(p)
+    continue
+  }
+  const raw = readFileSync(file)
+  assetMap[p] = `data:${mime};base64,${raw.toString('base64')}`
+  assetBytes += raw.length
+}
+if (missingAssets.length) {
+  console.warn(`⚠ 这些资源不在 public/ 里，双击版可能会白屏：${missingAssets.join(', ')}`)
+}
+if (Object.keys(assetMap).length) {
+  console.log(
+    `内联外部资源 ${Object.keys(assetMap).length} 项，原始 ${(assetBytes / 1048576).toFixed(1)} MB`,
+  )
+}
+
+// 拦截三个下载入口：<img> 的 src、fetch、XMLHttpRequest。
+// Three.js 的 ImageLoader 走 <img>，FileLoader/GLTFLoader 走 fetch，
+// 老一些的加载器走 XHR —— 三个都堵上才兜得住。
+const assetShim = `<script>
+(function () {
+  var A = ${JSON.stringify(assetMap)};
+  var KEYS = Object.keys(A).sort(function (a, b) { return b.length - a.length });
+  function swap(u) {
+    if (typeof u !== 'string') return u;
+    if (u.indexOf('data:') === 0 || u.indexOf('blob:') === 0) return u;
+    for (var i = 0; i < KEYS.length; i++) {
+      var k = KEYS[i];
+      if (u.length < k.length) continue;
+      if (u.slice(u.length - k.length) !== k) continue;
+      // 前面要么什么都没有，要么是个路径分隔符，避免误伤 xxx-boat.glb 这种
+      var c = u.length > k.length ? u.charAt(u.length - k.length - 1) : '';
+      if (c === '' || c === '/') return A[k];
+    }
+    return u;
+  }
+  window.__INLINE_ASSETS = A;
+  try {
+    var d = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+    if (d && d.set) {
+      Object.defineProperty(HTMLImageElement.prototype, 'src', {
+        configurable: true,
+        enumerable: d.enumerable,
+        get: function () { return d.get.call(this); },
+        set: function (v) { return d.set.call(this, swap(v)); }
+      });
+    }
+  } catch (e) {}
+  try {
+    var rf = window.fetch;
+    if (rf) {
+      window.fetch = function (input, init) {
+        if (typeof input === 'string') input = swap(input);
+        else if (input && input.url) {
+          var s = swap(input.url);
+          if (s !== input.url) input = new Request(s, input);
+        }
+        return rf.call(this, input, init);
+      };
+    }
+  } catch (e) {}
+  try {
+    var ro = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function (m, u) {
+      var a = Array.prototype.slice.call(arguments);
+      a[1] = swap(u);
+      return ro.apply(this, a);
+    };
+  } catch (e) {}
+})();
+</script>`
+html = html.replace('<script', assetShim + '<script')
+
+
 // 3. 输出目录
 //    原来写死成桌面的「英语背单词」，文件夹一改名就会在桌面另建一个旧名字的文件夹，
 //    产物被劈成两半。后来改成跟着源码走（源码上一级）。
