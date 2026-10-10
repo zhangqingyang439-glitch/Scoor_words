@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import type { ReactNode } from 'react'
 import type { SessionItem } from '../../study'
+import { sensesOf } from '../../study'
 import { db, createWordBook, setCollect, DEFAULT_WORD_BOOK, listWordBooks, type WordBookRow } from '../../db'
 import { prefetchWordAudio } from '../speech'
+import { SpeakButton } from '../SpeakButton'
+import { useSentenceData } from '../useSentenceData'
 
 /** 对勾收藏按钮：圆圈 + 动态打勾动画 */
 export function CollectCheck({ collected }: { collected: boolean }) {
@@ -189,6 +192,77 @@ export function CountdownRing({ seconds, total }: { seconds: number; total: numb
       style={{ background: `conic-gradient(#10b981 ${pct * 360}deg, var(--ring-track) 0deg)` }}
     >
       <span className="flex h-10 w-10 items-center justify-center rounded-full bg-card">{seconds}</span>
+    </div>
+  )
+}
+
+/**
+ * 第2/3遍作答后的回看卡：把第1遍的背诵内容（单词 + 释义 + 速记法）再摆出来，
+ * 无论对错都看一遍再切下一个词 —— 答完直接切词，记忆是断的。
+ *
+ * ok=false 时顶部给出正确答案行（第2遍是释义，第3遍是拼写，由调用方传入）。
+ */
+export function RecapCard({
+  item,
+  ok,
+  answer,
+  onContinue,
+}: {
+  item: SessionItem
+  ok: boolean
+  /** 答错时展示的正确答案；不传只标对错 */
+  answer?: string
+  onContinue: () => void
+}) {
+  const w = item.word
+  const senses = sensesOf(w)
+  const data = useSentenceData()
+  const mnem = data.m[w.name.toLowerCase()]
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="rounded-3xl bg-card p-6 shadow-sm">
+        <div className="flex min-h-8 items-center justify-between">
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+              ok ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'
+            }`}
+          >
+            {ok ? '✓ 答对了' : '✗ 没答对，重现时再来一次'}
+          </span>
+          <SpeakButton word={w.name} size="sm" />
+        </div>
+
+        <div className="mt-2 text-center">
+          <div className="text-4xl font-bold tracking-wide">{w.name}</div>
+          {w.usphone && <div className="mt-1 text-sm text-zinc-400">/{w.usphone}/</div>}
+        </div>
+
+        {!ok && answer && (
+          <div className="mt-3 rounded-lg bg-red-50 px-4 py-2.5 text-center text-sm font-medium text-red-500">
+            {answer}
+          </div>
+        )}
+
+        <div className="mt-4 space-y-2 text-left">
+          {senses.map((s, i) => (
+            <p key={i} className="rounded-lg bg-zinc-50 px-4 py-2">
+              <span className="mr-2 text-xs font-medium text-emerald-600">{s.pos}</span>
+              <span className="text-zinc-700">{s.zh.join('；')}</span>
+            </p>
+          ))}
+        </div>
+
+        {mnem && (
+          <div className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-left">
+            <div className="text-xs font-medium text-amber-500">🧠 速记法</div>
+            <div className="mt-1 text-sm leading-relaxed text-zinc-600">{mnem}</div>
+          </div>
+        )}
+      </div>
+      <button onClick={onContinue} className="rounded-2xl bg-brand py-4 font-semibold text-white active:bg-brand-press">
+        记好了，继续 ↷
+      </button>
     </div>
   )
 }

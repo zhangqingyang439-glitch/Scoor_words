@@ -8,3 +8,7 @@ dist-desktop/
 # 本地环境与系统文件
 *.local
 .DS_Store
+
+# 本地原始数据与冗余副本（不入仓库）
+data-tmp/
+new scoop/

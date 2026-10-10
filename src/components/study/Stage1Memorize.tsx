@@ -3,6 +3,7 @@ import type { SessionItem } from '../../study'
 import { sensesOf } from '../../study'
 import { speakWord } from '../speech'
 import { useSentenceData } from '../useSentenceData'
+import { DictCard } from '../DictCard'
 import { Card, CountdownRing } from './parts'
 
 const SECONDS = 60
@@ -17,6 +18,7 @@ export default function Stage1Memorize({
 }) {
   const [left, setLeft] = useState(SECONDS)
   const doneRef = useRef(false)
+  const [dictWord, setDictWord] = useState<string | null>(null)
   const w = item.word
   const senses = sensesOf(w)
   const data = useSentenceData()
@@ -56,7 +58,9 @@ export default function Stage1Memorize({
   return (
     <div className="flex flex-col gap-4">
       <Card item={item} top={<CountdownRing seconds={left} total={SECONDS} />}>
-        <div className="text-4xl font-bold tracking-wide">{w.name}</div>
+        <button onClick={() => setDictWord(w.name)} title="查看讲解" className="text-4xl font-bold tracking-wide active:opacity-70">
+          {w.name}
+        </button>
         {w.usphone && (
           <button onClick={() => speakWord(w.name)} className="mt-2 text-zinc-400">
             /{w.usphone}/ 🔊
@@ -80,6 +84,7 @@ export default function Stage1Memorize({
       <button onClick={finish} className="rounded-2xl bg-inverse py-4 font-semibold text-inverse-ink active:bg-inverse/85">
         记住了，下一个 ↷
       </button>
+      {dictWord && <DictCard word={dictWord} onClose={() => setDictWord(null)} />}
     </div>
   )
 }

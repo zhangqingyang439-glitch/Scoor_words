@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { SessionItem } from '../../study'
 import { sensesOf } from '../../study'
 import { tokenize } from '../../match'
@@ -7,8 +7,14 @@ import { useSentenceData } from '../useSentenceData'
 import { DictCard } from '../DictCard'
 import { SpeakButton } from '../SpeakButton'
 import { Card } from './parts'
+import { cacheCNTranslation, getCachedCN, translateOnline } from '../../cn'
 
-/** 第4遍 · 例句翻译：写翻译（不判对错），提交后看详细讲解；单词可点击查词典 */
+/** 拆复合词条时排除的虚词：不然 "the arctic" 会把句子里所有 the 都高亮 */
+const STOP_TARGETS = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'on', 'at', 'for', 'with', 'modal', 'not'])
+
+/** 第4遍 · 例句翻译：写翻译（不判对错），提交后看详细讲解；
+ *  例句里目标词高亮、短语划线标出，配短语表 + 句子结构讲解；
+ *  词库例句没带翻译时联网在线翻译兜底（结果缓存，离线可复看） */
 export default function Stage4Sentence({
   item,
   onDone,
@@ -23,14 +29,49 @@ export default function Stage4Sentence({
   const [text, setText] = useState('')
   const [explained, setExplained] = useState(false)
   const [dictWord, setDictWord] = useState<string | null>(null)
+  // 词库例句没带中文翻译时的在线翻译兜底
+  const [onlineZh, setOnlineZh] = useState<{ text?: string; loading: boolean } | null>(null)
 
-  const targets = useMemo(() => [w.name, ...(w.forms ?? [])], [w])
+  const targets = useMemo(() => {
+    const base: string[] = [w.name, ...(w.forms ?? [])]
+    // 复合词条（"mobile phone"、"arise arose arisen" 这类）拆开成单词也能高亮
+    for (const t of w.name.split(/[\s\-/=]+/)) {
+      if (t.length >= 2 && /^[a-zA-Z][a-zA-Z'-]*$/.test(t) && !STOP_TARGETS.has(t.toLowerCase())) base.push(t)
+    }
+    return base
+  }, [w])
   const isTarget = (t: string) => targets.map((x) => x.toLowerCase()).includes(t.toLowerCase())
 
-  /** 例句按词切开：单词可点击，目标词高亮 */
+  useEffect(() => {
+    if (!entry || entry.zh) {
+      setOnlineZh(null)
+      return
+    }
+    let alive = true
+    setOnlineZh({ loading: true })
+    void (async () => {
+      const cached = await getCachedCN(entry.en)
+      if (cached) {
+        if (alive) setOnlineZh({ text: cached, loading: false })
+        return
+      }
+      if (!navigator.onLine) {
+        if (alive) setOnlineZh({ loading: false })
+        return
+      }
+      const t = await translateOnline(entry.en, 'en-zh')
+      if (t) await cacheCNTranslation(entry.en, t)
+      if (alive) setOnlineZh({ text: t ?? undefined, loading: false })
+    })()
+    return () => {
+      alive = false
+    }
+  }, [entry])
+
+  /** 例句按词切开：目标词高亮、短语整段划线，单词可点击查词典 */
   const sentenceParts = useMemo(() => {
     if (!entry) return []
-    const parts: Array<{ text: string; word?: string; hit: boolean }> = []
+    const parts: Array<{ text: string; word?: string; hit: boolean; phrase?: number }> = []
     const re = /[a-zA-Z']+/g
     let last = 0
     let m: RegExpExecArray | null
@@ -40,6 +81,37 @@ export default function Stage4Sentence({
       last = m.index + m[0].length
     }
     if (last < entry.en.length) parts.push({ text: entry.en.slice(last), hit: false })
+
+    // 短语标注：把短语的词序列往句子的词序列上对，对上的整段划线（目标词高亮优先）。
+    // 短语表里写 "be ..."，句子里是 am/is/are/was/were —— 逐个变位试
+    if (entry.phrases?.length) {
+      const wordIdx: number[] = []
+      parts.forEach((p, i) => p.word && wordIdx.push(i))
+      const beForms = ['am', 'is', 'are', 'was', 'were', 'be', 'been', 'being']
+      entry.phrases.forEach((ph, pi) => {
+        const base = ph.p.toLowerCase().match(/[a-z']+/g) ?? []
+        if (base.length === 0) return
+        const candidates = base[0] === 'be' ? beForms.map((f) => [f, ...base.slice(1)]) : [base]
+        for (const ptoks of candidates) {
+          for (let s = 0; s + ptoks.length <= wordIdx.length; s++) {
+            let matched = true
+            for (let k = 0; k < ptoks.length; k++) {
+              if (parts[wordIdx[s + k]].word!.toLowerCase() !== ptoks[k]) {
+                matched = false
+                break
+              }
+            }
+            if (matched) {
+              for (let k = 0; k < ptoks.length; k++) {
+                const p = parts[wordIdx[s + k]]
+                if (!p.hit && p.phrase === undefined) p.phrase = pi
+              }
+              return
+            }
+          }
+        }
+      })
+    }
     return parts
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entry, targets])
@@ -82,7 +154,7 @@ export default function Stage4Sentence({
           <>
             <p className="text-left text-lg leading-relaxed">
               {sentenceParts.map((p, i) =>
-                p.word ? (
+                p.word && p.phrase === undefined ? (
                   <button
                     key={i}
                     onClick={() => setDictWord(p.word!)}
@@ -92,12 +164,28 @@ export default function Stage4Sentence({
                   >
                     {p.text}
                   </button>
+                ) : p.word ? (
+                  <span
+                    key={i}
+                    className="mx-px rounded px-0.5 text-amber-500 underline decoration-amber-300/80 decoration-2 underline-offset-4"
+                  >
+                    {p.text}
+                  </span>
                 ) : (
                   <span key={i}>{p.text}</span>
                 ),
               )}
             </p>
-            <p className="mt-2 text-center text-xs text-zinc-300">点例句里的单词可以查词典</p>
+            <p className="mt-2 text-center text-xs text-zinc-300">
+              点单词查词典{entry.phrases?.length ? ' · 划线的是短语' : ''}
+              {entry.src === 'tatoeba'
+                ? ' · 例句来自 Tatoeba (CC-BY)'
+                : entry.src === 'ted'
+                  ? ' · 例句来自 TED (CC BY-NC-ND)'
+                  : entry.src === 'ai'
+                    ? ' · AI 例句'
+                    : ''}
+            </p>
             <div className="mt-1 flex items-center justify-center gap-3">
               <SpeakButton word={w.name} size="sm" />
               <button onClick={() => speakSentence(entry.en)} className="text-sm text-zinc-400">
@@ -116,10 +204,32 @@ export default function Stage4Sentence({
               />
             ) : (
               <div className="mt-5 space-y-3 text-left">
-                {entry.zh && (
-                  <div className="rounded-xl bg-emerald-50 px-4 py-3">
-                    <div className="text-xs font-medium text-emerald-600">整句意思</div>
-                    <div className="mt-1 text-zinc-700">{entry.zh}</div>
+                <div className="rounded-xl bg-emerald-50 px-4 py-3">
+                  <div className="text-xs font-medium text-emerald-600">
+                    整句意思{!entry.zh && onlineZh?.text ? '（在线翻译 · 已缓存可离线查看）' : ''}
+                  </div>
+                  <div className="mt-1 text-zinc-700">
+                    {entry.zh ??
+                      (onlineZh?.loading ? '翻译中…' : onlineZh?.text ?? '当前离线，联网后可显示整句翻译')}
+                  </div>
+                </div>
+                {entry.gr && (
+                  <div className="rounded-xl bg-violet-50 px-4 py-3">
+                    <div className="text-xs font-medium text-violet-500">句子结构</div>
+                    <div className="mt-1 text-sm leading-relaxed text-zinc-700">{entry.gr}</div>
+                  </div>
+                )}
+                {entry.phrases && entry.phrases.length > 0 && (
+                  <div className="rounded-xl bg-sky-50 px-4 py-3">
+                    <div className="text-xs font-medium text-sky-500">短语 · 搭配</div>
+                    <div className="mt-2 space-y-1">
+                      {entry.phrases.map((ph) => (
+                        <p key={ph.p} className="text-sm">
+                          <span className="font-medium text-zinc-800">{ph.p}</span>
+                          <span className="ml-2 text-zinc-500">{ph.zh}</span>
+                        </p>
+                      ))}
+                    </div>
                   </div>
                 )}
                 <div className="rounded-xl bg-zinc-50 px-4 py-3">

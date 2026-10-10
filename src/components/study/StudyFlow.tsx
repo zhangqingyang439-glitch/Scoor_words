@@ -7,6 +7,7 @@ import Stage2Fill from './Stage2Fill'
 import Stage3Spell from './Stage3Spell'
 import Stage4Sentence from './Stage4Sentence'
 import Scratchpad from './Scratchpad'
+import LookupSheet from './LookupSheet'
 
 export type StudySpec =
   | { kind: 'normal'; extra: boolean }
@@ -39,8 +40,13 @@ export default function StudyFlow({ spec, onExit }: { spec: StudySpec; onExit: (
   const [intro, setIntro] = useState(true)
   const [errMsg, setErrMsg] = useState('')
   const [padOpen, setPadOpen] = useState(false)
+  const [lookupOpen, setLookupOpen] = useState(false)
+  /** 本次会话的词书（查词收藏时判断词条归属用；记词本复习/自定义词为 null） */
+  const [sessionBookId, setSessionBookId] = useState<string | null>(null)
   // 当前这个词的出现是否答错过（答错过就不消待重现副本）
   const erroredRef = useRef(false)
+  // 本轮内每个词连续答对的次数：连对两次就不再重现（频率别太高）
+  const correctRunRef = useRef<Map<string, number>>(new Map())
 
   useEffect(() => {
     erroredRef.current = false
@@ -57,6 +63,7 @@ export default function StudyFlow({ spec, onExit }: { spec: StudySpec; onExit: (
                 const s = await getSettings()
                 const book = getBook(s.currentBookId)
                 if (!book) throw new Error('请先选择词书')
+                setSessionBookId(book.id)
                 return buildSession(book, spec.extra)
               })()
         if (!alive) return
@@ -89,21 +96,24 @@ export default function StudyFlow({ spec, onExit }: { spec: StudySpec; onExit: (
     setQueue(plan ? plan.items.filter((it) => it.startStage < r) : [])
     setIdx(0)
     setIntro(true)
+    correctRunRef.current = new Map() // 新一轮重新数连对
   }
 
   async function handleStageDone() {
     if (!current) return
     await completeStage(current, round)
     const key = `${current.bookId}:${current.word.name}`
-    // 这次出现无错 → 消掉一个待重现副本；答错过则保持 2 个不动。
-    // 先算出新队列再决定 idx/换轮，避免用旧长度判断导致越界空页
+    const run = (correctRunRef.current.get(key) ?? 0) + 1
+    correctRunRef.current.set(key, run)
     let nq = queue
-    if (!erroredRef.current) {
-      const i = queue.findIndex((it, j) => j > idx && `${it.bookId}:${it.word.name}` === key)
-      if (i >= 0) {
-        nq = [...queue]
-        nq.splice(i, 1)
-      }
+    if ((round === 2 || round === 3) && run >= 2) {
+      // 连对两次：把这个词还在排队的副本全部清掉，不再出现
+      nq = queue.filter((it, j) => j <= idx || `${it.bookId}:${it.word.name}` !== key)
+    } else if ((round === 2 || round === 3) && !erroredRef.current && Math.random() < 0.3) {
+      // 频率不高：只有三成概率随机撒回一次（第1/4遍从不重现）
+      const at = idx + 1 + Math.floor(Math.random() * Math.max(1, queue.length - idx))
+      nq = [...queue]
+      nq.splice(Math.min(at, nq.length), 0, { ...current })
     }
     if (idx + 1 < nq.length) {
       setQueue(nq)
@@ -119,22 +129,23 @@ export default function StudyFlow({ spec, onExit }: { spec: StudySpec; onExit: (
     }
   }
 
-  /** 第2/3遍答错：保持该词始终有 2 个待重现副本，且间隔摆放不连在一起 */
+  /** 第2/3遍答错：这个词的两个副本**随机**撒进队列剩下的部分，全程都可能再冒出来 */
   function handleError() {
     erroredRef.current = true
     if (!current) return
     const key = `${current.bookId}:${current.word.name}`
+    correctRunRef.current.set(key, 0) // 答错把连对清零
     setQueue((q) => {
       let copy = [...q]
-      // 先删掉这个词所有还在排队的旧副本（避免越积越多）
+      // 先删掉这个词所有还在排队的旧副本（同一词多次答错不叠加）
       for (let i = copy.length - 1; i > idx; i--) {
         if (`${copy[i].bookId}:${copy[i].word.name}` === key) copy.splice(i, 1)
       }
-      // 再重新插两个，位置隔开
-      const at1 = Math.min(idx + 3, copy.length)
-      copy.splice(at1, 0, { ...current })
-      const at2 = Math.min(at1 + 5, copy.length)
-      copy.splice(at2, 0, { ...current })
+      // 再随机插两个
+      for (let n = 0; n < 2; n++) {
+        const at = idx + 1 + Math.floor(Math.random() * Math.max(1, copy.length - idx))
+        copy.splice(Math.min(at, copy.length), 0, { ...current })
+      }
       return copy
     })
   }
@@ -218,7 +229,11 @@ export default function StudyFlow({ spec, onExit }: { spec: StudySpec; onExit: (
           <div className="text-5xl">{['👁', '✍️', '🔤', '📖'][round - 1]}</div>
           <p className="text-xl font-bold">{stage.title}</p>
           <p className="text-sm text-zinc-500">{stage.hint}</p>
-          <p className="text-xs text-zinc-400">本轮共 {queue.length} 词 · 填义/默写答错的词会马上重现</p>
+          <p className="text-xs text-zinc-400">
+            {round === 2 || round === 3
+              ? `本轮共 ${queue.length} 词 · 答错的词随机重现，一个词连对两次就不再出现`
+              : `本轮共 ${queue.length} 词 · 顺一遍就过，不重复出现`}
+          </p>
           <button
             onClick={() => setIntro(false)}
             className="mt-4 rounded-2xl bg-brand px-12 py-3.5 font-semibold text-white active:bg-brand-press"
@@ -237,15 +252,25 @@ export default function StudyFlow({ spec, onExit }: { spec: StudySpec; onExit: (
         )
       )}
 
-      {/* 草稿板入口 */}
-      <button
-        onClick={() => setPadOpen(true)}
-        className="fixed bottom-24 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-inverse/90 text-xl text-inverse-ink shadow-lg active:bg-inverse/85"
-        title="草稿板"
-      >
-        ✏️
-      </button>
+      {/* 悬浮工具：查词 + 草稿板。背单词途中随时查词、看讲解、收藏 */}
+      <div className="fixed bottom-24 right-4 z-40 flex flex-col gap-2">
+        <button
+          onClick={() => setLookupOpen(true)}
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-inverse/90 text-xl text-inverse-ink shadow-lg active:bg-inverse/85"
+          title="查词"
+        >
+          🔍
+        </button>
+        <button
+          onClick={() => setPadOpen(true)}
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-inverse/90 text-xl text-inverse-ink shadow-lg active:bg-inverse/85"
+          title="草稿板"
+        >
+          ✏️
+        </button>
+      </div>
       {padOpen && <Scratchpad onClose={() => setPadOpen(false)} />}
+      {lookupOpen && <LookupSheet studyBookId={sessionBookId} onClose={() => setLookupOpen(false)} />}
     </div>
   )
 }

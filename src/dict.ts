@@ -6,6 +6,10 @@ export interface DictEntry {
   usphone?: string
   ukphone?: string
   forms?: string[]
+  /** 近义词（WordNet 同词集，enrich-dict.mjs 生成，按常用度排） */
+  syn?: string[]
+  /** 收录的内置词书及序位（"书id:第几个词"，enrich-dict.mjs 生成） */
+  bk?: string[]
 }
 
 let cache: Promise<Record<string, DictEntry>> | null = null
