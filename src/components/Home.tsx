@@ -18,6 +18,7 @@ import { SpeakButton } from './SpeakButton'
 import { speakZh } from './speech'
 import { cacheCNTranslation, getCachedCN, loadCnIndex, loadZhSent, translateOnline, type CnCandidate } from '../cn'
 import { todayCounts, type TodayCounts } from '../study'
+import { loadSession, normalSessionKey } from '../session'
 import { normalizeEn, normalizeZh, splitPosLine, meaningVariants } from '../match'
 
 /** 查词结果：en=英文查释义；cn=中文反查候选（带匹配释义）+ 整句翻译 + 在线兜底 */
@@ -127,6 +128,8 @@ export default function Home({
   const streak = useLiveQuery(() => getStreak(), [])
   const [bookId, setBookId] = useState<string | null | undefined>(undefined)
   const [counts, setCounts] = useState<TodayCounts | null>(null)
+  /** 有没有没背完的会话存档（有的话主按钮显示「接着学习」） */
+  const [hasSaved, setHasSaved] = useState(false)
 
   const [query, setQuery] = useState('')
   const [result, setResult] = useState<SearchResult | null>(null)
@@ -140,6 +143,18 @@ export default function Home({
   useEffect(() => {
     getSettings().then((s) => setBookId(s.currentBookId))
   }, [])
+
+  // 有没有背到一半的会话：主按钮据此显示「接着学习」
+  useEffect(() => {
+    if (bookId === undefined) return
+    let alive = true
+    loadSession(normalSessionKey(bookId))
+      .then((s) => alive && setHasSaved(!!s))
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [bookId, stat])
 
   useEffect(() => {
     let alive = true
@@ -160,7 +175,7 @@ export default function Home({
   const hasTask = (counts?.remainingNew ?? 0) > 0 || (counts?.resumeCount ?? 0) > 0 || (counts?.reviewAvailable ?? 0) > 0
   const label = !book
     ? '先选一本词书'
-    : (counts?.resumeCount ?? 0) > 0
+    : hasSaved || (counts?.resumeCount ?? 0) > 0
       ? '接着学习 ↷'
       : hasTask
         ? '开始学习'

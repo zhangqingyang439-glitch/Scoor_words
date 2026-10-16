@@ -8,6 +8,7 @@ import Stage3Spell from './Stage3Spell'
 import Stage4Sentence from './Stage4Sentence'
 import Scratchpad from './Scratchpad'
 import LookupSheet from './LookupSheet'
+import { clearSession, loadSession, normalSessionKey, notebookSessionKey, saveSession } from '../../session'
 
 export type StudySpec =
   | { kind: 'normal'; extra: boolean }
@@ -43,6 +44,8 @@ export default function StudyFlow({ spec, onExit }: { spec: StudySpec; onExit: (
   const [lookupOpen, setLookupOpen] = useState(false)
   /** 本次会话的词书（查词收藏时判断词条归属用；记词本复习/自定义词为 null） */
   const [sessionBookId, setSessionBookId] = useState<string | null>(null)
+  /** 会话存档的 key（按书/按勾选词区分），存到 ref 里给存档 effect 用 */
+  const specKeyRef = useRef<string | null>(null)
   // 当前这个词的出现是否答错过（答错过就不消待重现副本）
   const erroredRef = useRef(false)
   // 本轮内每个词连续答对的次数：连对两次就不再重现（频率别太高）
@@ -56,6 +59,28 @@ export default function StudyFlow({ spec, onExit }: { spec: StudySpec; onExit: (
     let alive = true
     ;(async () => {
       try {
+        // 先看有没有上次没背完的存档（同一本书/同一批勾选词）：有就原样接着背，
+        // 从第几轮、第几词、错词副本全都还原 —— 只有四遍全部完成才会清档从头开始
+        const key =
+          spec.kind === 'notebook'
+            ? notebookSessionKey(spec.wordBookId, spec.selectedIds)
+            : normalSessionKey((await getSettings()).currentBookId)
+        specKeyRef.current = key
+        const saved = await loadSession(key)
+        if (!alive) return
+        if (saved && saved.queue.length > 0) {
+          setPlan(saved.plan)
+          setRound(saved.round)
+          setQueue(saved.queue)
+          setIdx(Math.min(saved.idx, saved.queue.length - 1))
+          setIntro(saved.intro)
+          setPhase('round')
+          if (spec.kind === 'normal') {
+            const s = await getSettings()
+            setSessionBookId(s.currentBookId)
+          }
+          return
+        }
         const result =
           spec.kind === 'notebook'
             ? await buildNotebookSession(spec.wordBookId, spec.selectedIds)
@@ -88,6 +113,25 @@ export default function StudyFlow({ spec, onExit }: { spec: StudySpec; onExit: (
       alive = false
     }
   }, [spec])
+
+  // 进度一变就存档：退出/切页/刷新后回来还能原样接着
+  useEffect(() => {
+    if (phase !== 'round' || !plan || !specKeyRef.current || queue.length === 0) return
+    void saveSession(specKeyRef.current, {
+      spec: { ...spec },
+      plan,
+      round,
+      queue,
+      idx,
+      intro,
+      savedAt: Date.now(),
+    })
+  }, [phase, plan, round, queue, idx, intro, spec])
+
+  // 四遍全部完成才清档：下次进来从头开始新一批词
+  useEffect(() => {
+    if (phase === 'done' && specKeyRef.current) void clearSession(specKeyRef.current)
+  }, [phase])
 
   const current: SessionItem | undefined = queue[idx]
 
